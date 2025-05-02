@@ -1,1 +1,256 @@
+api.py 
+
+from flask import Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import sqlite3
+import os
+
+# Create Flask app
+app = Flask(__name__)
+
+# Configure Flask-Limiter for rate limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["10 per minute"]
+)
+limiter.init_app(app)
+
+# Set path to SQLite database
+DB_PATH = "/root/weather_pipeline_project/data/weather.db"
+
+# Helper function to query SQLite database
+def query_db(query, args=(), one=False):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(query, args)
+    results = cur.fetchall()
+    conn.close()
+    return (results[0] if results else None) if one else results
+
+# Root endpoint
+@app.route("/")
+def index():
+    return jsonify({"message": "Weather API is running!"})
+
+# GET: Latest 10 weather entries
+@app.route("/weather", methods=["GET"])
+def all_weather():
+    rows = query_db("SELECT * FROM weather ORDER BY timestamp DESC LIMIT 10")
+    return jsonify([dict(row) for row in rows])
+
+# GET: Weather data by city
+@app.route("/weather/city", methods=["GET"])
+@limiter.limit("5 per minute")
+def weather_by_city():
+    city = request.args.get("name")
+    if not city:
+        return {"error": "Please specify a city using ?name=CityName"}, 400
+
+    # Use parameterized query to prevent SQL injection
+    rows = query_db(
+        "SELECT * FROM weather WHERE city = ? ORDER BY timestamp DESC LIMIT 5",
+        (city,)
+    )
+    return jsonify([dict(row) for row in rows])
+
+# ... your existing route definitions above ...
+
+# Start the Flask server
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
+
+----------------------------------------------------------------------------
+
+fetch.py
+
+from flask import Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import sqlite3
+import os
+
+# Create Flask app
+app = Flask(__name__)
+
+# Configure Flask-Limiter for rate limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["10 per minute"]
+)
+limiter.init_app(app)
+
+# Set path to SQLite database
+DB_PATH = "/root/weather_pipeline_project/data/weather.db"
+
+# Helper function to query SQLite database
+def query_db(query, args=(), one=False):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(query, args)
+    results = cur.fetchall()
+    conn.close()
+    return (results[0] if results else None) if one else results
+
+# Root endpoint
+@app.route("/")
+def index():
+    return jsonify({"message": "Weather API is running!"})
+
+# GET: Latest 10 weather entries
+@app.route("/weather", methods=["GET"])
+def all_weather():
+    rows = query_db("SELECT * FROM weather ORDER BY timestamp DESC LIMIT 10")
+    return jsonify([dict(row) for row in rows])
+
+# GET: Weather data by city
+@app.route("/weather/city", methods=["GET"])
+@limiter.limit("5 per minute")
+def weather_by_city():
+    city = request.args.get("name")
+    if not city:
+        return {"error": "Please specify a city using ?name=CityName"}, 400
+
+    # Use parameterized query to prevent SQL injection
+    rows = query_db(
+        "SELECT * FROM weather WHERE city = ? ORDER BY timestamp DESC LIMIT 5",
+        (city,)
+    )
+    return jsonify([dict(row) for row in rows])
+
+# ... your existing route definitions above ...
+
+# Start the Flask server
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
+
+[root@173-255-231-27 app]# ls
+api.py  data  fetch.py  main.py  process.py  __pycache__  save_data.py
+[root@173-255-231-27 app]# cat fetch.py
+import requests
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+from pathlib import Path
+dotenv_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path)
+  # Load variables from .env file
+
+API_KEY = os.getenv("WEATHER_API_KEY")
+print("Loaded API Key:", API_KEY)  # TEMP: remove later
+
+
+def fetch_weather_data(city="Washington"):
+    API_KEY = os.getenv("WEATHER_API_KEY")
+    if not API_KEY:
+        raise Exception("Missing WEATHER_API_KEY in environment")
+
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
+
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise Exception(f"API Error {response.status_code}: {response.text}")
+
+    return response.json()
+
+# For testing directly
+if __name__ == "__main__":
+    data = fetch_weather_data("Washington")
+    print(data)
+
+---------------------------------------------------------------------------
+
+process.py
+
+import pandas as pd
+
+def normalize_weather(raw_json):
+    """Converts raw weather JSON into a cleaned pandas DataFrame."""
+    data = {
+        'city': raw_json.get('name'),
+        'temperature_c': raw_json['main'].get('temp'),
+        'feels_like_c': raw_json['main'].get('feels_like'),
+        'temp_min_c': raw_json['main'].get('temp_min'),
+        'temp_max_c': raw_json['main'].get('temp_max'),
+        'pressure': raw_json['main'].get('pressure'),
+        'humidity': raw_json['main'].get('humidity'),
+        'weather_main': raw_json['weather'][0].get('main'),
+        'weather_desc': raw_json['weather'][0].get('description'),
+        'wind_speed': raw_json['wind'].get('speed'),
+        'wind_deg': raw_json['wind'].get('deg'),
+        'timestamp': pd.Timestamp.now()
+    }
+
+    df = pd.DataFrame([data])
+    return df
+
+# Test only
+if __name__ == "__main__":
+    from fetch import fetch_weather_data
+    raw = fetch_weather_data("Washington")
+    df = normalize_weather(raw)
+    print(df.head())
+--------------------------------------------------------------------------
+
+save_data.py
+
+
+import os
+import sqlite3
+
+def save_to_csv(df, path='data/weather_log.csv'):
+    """Append data to CSV (create file if it doesn't exist)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    df.to_csv(path, mode='a', index=False, header=not os.path.exists(path))
+
+def save_to_db(df, db_path='data/weather.db'):
+    """Save data to SQLite database."""
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    df.to_sql('weather', conn, if_exists='append', index=False)
+    conn.close()
+
+# Test
+if __name__ == "__main__":
+    from fetch import fetch_weather_data
+    from process import normalize_weather
+
+    raw = fetch_weather_data("Washington")
+    df = normalize_weather(raw)
+
+    save_to_csv(df)
+    save_to_db(df)
+    print("Data saved to CSV and SQLite.")
+
+---------------------------------------------------------------------------
+ main.py
+
+from fetch import fetch_weather_data
+from process import normalize_weather
+from save_data import save_to_csv, save_to_db
+from api import app
+import os
+
+if __name__ == "__main__":
+    city = os.getenv("CITY", "Washington")  # fallback to "Washington"
+    print(f"[INFO] Fetching weather for: {city}")
+
+    raw = fetch_weather_data(city)
+    df = normalize_weather(raw)
+
+    print("[INFO] Saving to CSV and DB...")
+    save_to_csv(df)
+    save_to_db(df)
+
+    print("[INFO] Starting Flask API server...")
+    app.run(debug=True, host="0.0.0.0", port=5050)
+
+
+
+
+
 

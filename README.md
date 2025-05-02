@@ -171,8 +171,7 @@ def weather_by_city():
 
     
 # 7. Combine into Main Pipeline (main.py)
-python
-Copy code
+
 from app.fetch import fetch_weather_data
 from app.process import normalize_weather
 from app.storage import save_to_csv, save_to_db

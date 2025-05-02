@@ -48,9 +48,13 @@ pip install requests pandas flask python-dotenv sqlite3 flask-limiter
 Add to requirements.txt:
 
 requests
+
 pandas
+
 flask
+
 python-dotenv
+
 flask-limiter
 
 <img width="343" alt="requirem" src="https://github.com/user-attachments/assets/f590010f-e673-45bc-b7dd-19c0bd2cd48e" />
@@ -77,11 +81,10 @@ def fetch_weather_data(city="Washington"):
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
     response = requests.get(url)
 
-    if response.status_code != 200:
+   if response.status_code != 200:
         raise Exception(f"API Error: {response.status_code}, {response.text}")
-
-
-    return response.json()
+    
+   return response.json()
 
     
 <img width="449" alt="fetch" src="https://github.com/user-attachments/assets/17683a5d-6ec1-4bcc-9e9d-9c51f918bbc1" />
@@ -105,8 +108,8 @@ def normalize_weather(raw_json):
         'timestamp': pd.Timestamp.now()
     }
 
-    df = pd.DataFrame([data])
-    return df
+   df = pd.DataFrame([data])
+   return df
 
 <img width="429" alt="processpy" src="https://github.com/user-attachments/assets/5fba255a-6255-4559-8eed-523ce34cf717" />
 
@@ -182,8 +185,8 @@ if __name__ == "__main__":
     save_to_csv(df)
     save_to_db(df)
 
-    # Optional: Run Flask API
-    app.run(debug=True)
+   # Optional: Run Flask API
+   app.run(debug=True)
 
 <img width="454" alt="mainp" src="https://github.com/user-attachments/assets/89397063-bdfd-4379-acf8-53a828ec2889" />
 

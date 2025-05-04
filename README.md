@@ -70,8 +70,8 @@ WEATHER_API_KEY=your_openweathermap_key_here
 
 # 3. Fetch Data from the Weather API (app/fetch.py)
 
-import requests
-import os
+```python
+import requests, os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -80,12 +80,12 @@ def fetch_weather_data(city="Washington"):
     API_KEY = os.getenv("WEATHER_API_KEY")
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
     response = requests.get(url)
-
-   if response.status_code != 200:
+    if response.status_code != 200:
         raise Exception(f"API Error: {response.status_code}, {response.text}")
-    
-   return response.json()
+    return response.json()
+```
 
+---
     
 <img width="449" alt="fetch" src="https://github.com/user-attachments/assets/17683a5d-6ec1-4bcc-9e9d-9c51f918bbc1" />
 
@@ -95,6 +95,7 @@ def fetch_weather_data(city="Washington"):
     
 # 4. Process/Clean Data (app/process.py)
 
+```python
 import pandas as pd
 
 def normalize_weather(raw_json):
@@ -107,16 +108,17 @@ def normalize_weather(raw_json):
         'wind_speed': raw_json['wind']['speed'],
         'timestamp': pd.Timestamp.now()
     }
+    df = pd.DataFrame([data])
+    return df
+```
 
-   df = pd.DataFrame([data])
-   return df
-
+---
 <img width="429" alt="processpy" src="https://github.com/user-attachments/assets/5fba255a-6255-4559-8eed-523ce34cf717" />
 
 # 5. Save to CSV & SQLite (app/save_data.py)
 
-import sqlite3
-import os
+```python
+import sqlite3, os
 
 def save_to_csv(df, path='data/weather.csv'):
     df.to_csv(path, mode='a', header=not os.path.exists(path), index=False)
@@ -125,13 +127,16 @@ def save_to_db(df, db='data/weather.db'):
     conn = sqlite3.connect(db)
     df.to_sql('weather', conn, if_exists='append', index=False)
     conn.close()
+```
 
+---
 <img width="324" alt="savedata" src="https://github.com/user-attachments/assets/d28e0147-272a-40e1-9f90-c734468b3edf" />
 
 <img width="432" alt="savpy" src="https://github.com/user-attachments/assets/a4981887-7f05-4289-b187-e9a7a4606cea" />
    
 # 6. Build Flask API Server (app/api.py)
 
+```python
 from flask import Flask, jsonify, request
 import sqlite3
 from flask_limiter import Limiter
@@ -163,6 +168,9 @@ def weather_by_city():
     rows = cur.fetchall()
     conn.close()
     return jsonify(rows)
+```
+
+---
 
 <img width="454" alt="apipy" src="https://github.com/user-attachments/assets/f22bb666-8090-4d1a-87dd-190c45878554" />
 
@@ -172,9 +180,10 @@ def weather_by_city():
     
 # 7. Combine into Main Pipeline (main.py)
 
+```python
 from app.fetch import fetch_weather_data
 from app.process import normalize_weather
-from app.storage import save_to_csv, save_to_db
+from app.save_data import save_to_csv, save_to_db
 from app.api import app
 
 if __name__ == "__main__":
@@ -184,9 +193,11 @@ if __name__ == "__main__":
     save_to_csv(df)
     save_to_db(df)
 
-   # Optional: Run Flask API
-   app.run(debug=True)
+    # Optional: Run Flask API
+    app.run(debug=True)
+```
 
+---
 <img width="454" alt="mainp" src="https://github.com/user-attachments/assets/89397063-bdfd-4379-acf8-53a828ec2889" />
 
 <img width="287" alt="flask" src="https://github.com/user-attachments/assets/24a50204-8a59-4c22-942c-2ccfc56d4ae5" />
